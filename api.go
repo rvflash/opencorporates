@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT License
 // that can be found in the LICENSE file.
 
-// Unofficial Golang API client for the OpenCorporates.
+// Package opencorporates is an unofficial Golang API client for the OpenCorporates.
 // http://api.opencorporates.com/documentation/API-Reference
 package opencorporates
 
@@ -18,18 +18,25 @@ import (
 )
 
 const (
-	// API default version
+	// Version is the API default version
 	Version = "0.4"
-	// OpenCorporates URL
+	// URL is the base URL of the OpenCorporates service.
 	URL = "https://api.opencorporates.com/v%s/"
-	// Method calls
-	ByNameURL   = "companies/search"
+)
+
+// Method calls
+const (
+	// ByNameURL is the URL to search a company by name.
+	ByNameURL = "companies/search"
+	// ByNumberURL is the URL to search a company by identifier.
 	ByNumberURL = "companies/%s/%s"
 )
 
+// Error messages.
 var (
-	// Error messages.
-	ErrMethod         = errors.New("unknown method call")
+	// ErrMethod is the error for unknown method call.
+	ErrMethod = errors.New("unknown method call")
+	// ErrMissingCountry is the error returned if the jurisdiction code is missing.
 	ErrMissingCountry = errors.New("missing jurisdiction code")
 )
 
