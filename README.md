@@ -17,21 +17,28 @@ $ go get -u github.com/rvflash/opencorporates
 
 ### Usage
 
-Package still in development, all the method are not implemented yet.
+Package still in development, all the methods are not implemented yet.
 
-The import of the package and check of errors are ignored for the demo.
+The import of the package and errors check are voluntary ignored for the demo.
 
 
-#### Search a company by its name.
+#### Search a company by its name or jurisdication .
 
 ```go
 api := &opencorporates.API{}
-list, _ := api.ByCompanyName("nautic motors evasion", "fr")
-for _, company := range list {
-    println(company.Name+" #"+ company.Number)
+it := api.Companies("nautic motors evasion", "fr")
+for {
+    company, err := it.Next()
+    if err != nil {
+        if err != opencorporates.EOF {
+            fmt.Println(err)
+        }
+        break
+    }
+    fmt.Printf("%s (%s)\n", company.Name, company.Number)
 }
-// Output: NAUTIC MOTOR'S EVASION 35 (810622795)
-// SARL NAUTIC MOTOR'S EVASION (529591737)
+// Output: SARL NAUTIC MOTOR'S EVASION (529591737)
+// NAUTIC MOTOR'S EVASION 35 (810622795)
 ```
 
 #### Search a company by its number (identifier).
