@@ -13,17 +13,24 @@ import (
 // Caution: we voluntary ignore errors for the demo.
 var api = &opencorporates.API{}
 
-func ExampleAPIByCompanyName() {
-	list, _ := api.ByCompanyName("nautic motors evasion", "fr")
-	for _, company := range list {
-		fmt.Printf("%s (%s)\n", company.Name, company.Number)
-	}
-	// Output: NAUTIC MOTOR'S EVASION 35 (810622795)
-	// SARL NAUTIC MOTOR'S EVASION (529591737)
-}
-
-func ExampleAPIByCompanyNumber() {
-	company, _ := api.ByCompanyNumber("529591737", "fr")
+func ExampleAPI_CompanyByID() {
+	company, _ := api.CompanyByID("529591737", "fr")
 	fmt.Printf("%s (%s)\n", company.Name, company.Number)
 	// Output: SARL NAUTIC MOTOR'S EVASION (529591737)
+}
+
+func ExampleAPI_Companies() {
+	it := api.Companies("nautic motors evasion", "fr")
+	for {
+		company, err := it.Next()
+		if err != nil {
+			if err != opencorporates.EOF {
+				fmt.Println(err)
+			}
+			break
+		}
+		fmt.Printf("%s (%s)\n", company.Name, company.Number)
+	}
+	// Output: SARL NAUTIC MOTOR'S EVASION (529591737)
+	// NAUTIC MOTOR'S EVASION 35 (810622795)
 }
