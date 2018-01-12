@@ -22,22 +22,18 @@ const (
 	Version = "0.4"
 	// URL is the base URL of the OpenCorporates service.
 	URL = "https://api.opencorporates.com/v%s/"
-)
-
-// Method calls
-const (
-	// ByNameURL is the URL to search a company by name.
+	// ByNameURL is the path to search a company by name or jurisdiction.
 	ByNameURL = "companies/search"
-	// ByNumberURL is the URL to search a company by identifier.
-	ByNumberURL = "companies/%s/%s"
+	// ByNumberURL is the path to search a company by identifier.
+	ByNumberURL = "companies/%s/%s?sparse=true"
 )
 
 // Error messages.
 var (
 	// ErrMethod is the error for unknown method call.
 	ErrMethod = errors.New("unknown method call")
-	// ErrMissingCountry is the error returned if the jurisdiction code is missing.
-	ErrMissingCountry = errors.New("missing jurisdiction code")
+	// ErrJurisdiction is the error returned if the jurisdiction code is missing.
+	ErrJurisdiction = errors.New("missing jurisdiction code")
 )
 
 // Date represents a date without time.
@@ -88,16 +84,27 @@ type Company struct {
 	Name            string  `json:"name"`
 	Kind            string  `json:"company_type"`
 	Number          string  `json:"company_number"`
-	CountryCode     string  `json:"jurisdiction_code,omitempty"`
+	CountryCode     string  `json:"country_code,omitempty"`
+	jurisdiction    string  `json:"jurisdiction_code,omitempty"`
 	CreationDate    Date    `json:"incorporation_date"`
 	DissolutionDate Date    `json:"dissolution_date,omitempty"`
 	Address         Address `json:"registered_address,omitempty"`
 }
 
-// ByCompanyNumber returns the company by its identifier and jurisdiction code.
+// Companies returns an iterator of companies with its name or / and in this jurisdiction.
+func (api *API) Companies(name, jurisdiction string) *CompanyIterator {
+	return &CompanyIterator{
+		api:          api,
+		page:         NewPager(1),
+		name:         name,
+		jurisdiction: jurisdiction,
+	}
+}
+
+// CompanyByID returns the company by its identifier and jurisdiction code.
 // companies/fr/529591737
-func (api *API) ByCompanyNumber(n, code string) (c Company, err error) {
-	url, err := api.url(ByNumberURL, n, code)
+func (api *API) CompanyByID(id, jurisdiction string) (c Company, err error) {
+	url, err := api.url(ByNumberURL, id, jurisdiction)
 	if err != nil {
 		return
 	}
@@ -106,12 +113,6 @@ func (api *API) ByCompanyNumber(n, code string) (c Company, err error) {
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	// Only accepts valid response.
-	if resp.StatusCode > http.StatusNotFound {
-		err = errors.New(resp.Status)
-		return
-	}
 
 	// Response contains the search response.
 	type Response struct {
@@ -126,79 +127,74 @@ func (api *API) ByCompanyNumber(n, code string) (c Company, err error) {
 	return
 }
 
-// ByCompanyName calls the search method of the API to lookup companies by name.
-// The second parameter, optional, allows to filter by jurisdiction code.
-// companies/search?q=nautic+motors+evasion&jurisdiction_code=fr
-func (api *API) ByCompanyName(q, code string) ([]Company, error) {
-	url, err := api.url(ByNameURL, q, code)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := api.call(url)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Response contains the search response.
-	type Response struct {
-		Results struct {
-			Companies []struct {
-				Company Company `json:"company,omitempty"`
-			} `json:"companies,omitempty"`
-		} `json:"results"`
-	}
-	var res Response
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return nil, err
-	}
-	var list []Company
-	for _, c := range res.Results.Companies {
-		list = append(list, c.Company)
-	}
-	return list, nil
-}
-
-func (api *API) call(url string) (*http.Response, error) {
+func (api *API) call(url string) (resp *http.Response, err error) {
 	if api.http == nil {
 		// Default client.
 		api.http = http.DefaultClient
 	}
-	return api.http.Get(url)
+	resp, err = api.http.Get(url)
+	if err != nil {
+		return
+	}
+	// Only accepts valid response.
+	if resp.StatusCode > http.StatusBadRequest {
+		if resp.StatusCode < http.StatusInternalServerError {
+			// Response contains the search response.
+			type Response struct {
+				Err struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			var res Response
+			if jErr := json.NewDecoder(resp.Body).Decode(&res); jErr == nil {
+				err = errors.New(res.Err.Message)
+			}
+		}
+		if err == nil {
+			err = errors.New(resp.Status)
+		}
+		_ = resp.Body.Close()
+	}
+	return
 }
 
-func (api *API) url(method string, param ...string) (string, error) {
+func (api *API) url(method string, param ...interface{}) (string, error) {
 	if api.Version == "" {
 		// Default value.
 		api.Version = Version
 	}
 	switch method {
 	case ByNumberURL:
-		var number, country string
+		var id, jurisdiction string
 		if len(param) == 2 {
-			number = url.QueryEscape(param[0])
-			country = url.QueryEscape(param[1])
+			id = url.QueryEscape(param[0].(string))
+			jurisdiction = url.QueryEscape(param[1].(string))
 		}
-		if _, err := strconv.Atoi(number); err != nil {
+		if _, err := strconv.Atoi(id); err != nil {
 			return "", err
 		}
-		if country == "" {
-			return "", ErrMissingCountry
+		if jurisdiction == "" {
+			return "", ErrJurisdiction
 		}
-		return fmt.Sprintf(URL+ByNumberURL, api.Version, country, number), nil
+		return fmt.Sprintf(URL+ByNumberURL, api.Version, jurisdiction, id), nil
 	case ByNameURL:
-		var query, country string
+		var q, jurisdiction string
+		var page int
 		switch len(param) {
+		case 3:
+			page = param[2].(int)
+			fallthrough
 		case 2:
-			country = url.QueryEscape(param[1])
+			jurisdiction = url.QueryEscape(param[1].(string))
 			fallthrough
 		case 1:
-			query = url.QueryEscape(param[0])
+			q = url.QueryEscape(param[0].(string))
 		}
-		if country != "" {
-			return fmt.Sprintf(URL+ByNameURL+"?q=%s&jurisdiction_code=%s", api.Version, query, country), nil
+		query := URL + ByNameURL + "?page=%d&order=score&q=%s"
+		if jurisdiction != "" {
+			return fmt.Sprintf(query+"&jurisdiction_code=%s", api.Version, page, q, jurisdiction), nil
 		}
-		return fmt.Sprintf(URL+ByNameURL+"?q=%s", api.Version, query), nil
+		return fmt.Sprintf(query, api.Version, page, q), nil
 	}
 	return "", ErrMethod
 }
