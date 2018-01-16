@@ -25,7 +25,7 @@ The import of the package and errors check are voluntary ignored for the demo.
 #### Search a company by its name or jurisdication .
 
 ```go
-api := &opencorporates.API{}
+api := &opencorporates.API()
 it := api.Companies("nautic motors evasion", "fr")
 for {
     company, err := it.Next()
@@ -44,8 +44,8 @@ for {
 #### Search a company by its number (identifier).
 
 ```go
-api := &opencorporates.API{}
-company, _ := api.ByCompanyNumber("529591737", "fr")
+api := &opencorporates.API()
+company, _ := api.CompanyByID("529591737", "fr")
 println(company.Name+" #"+ company.Number)
 // Output: SARL NAUTIC MOTOR'S EVASION (529591737)
 ```
